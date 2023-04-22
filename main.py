@@ -7,8 +7,9 @@ from firebase_admin import firestore
 import json
 import requests
 
-#firebaseのapiの設定
-cred = credentials.Certificate("./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
+# firebaseのapiの設定
+cred = credentials.Certificate(
+    "./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -31,38 +32,94 @@ def send_to_database():
     doc_ref.set({'key': 'value'})
 
 
-#使用言語の取得
-username = "shotaro-ada"
-url = f"https://api.github.com/users/{username}/repos"
-response = requests.get(url)
+# 使用言語の取得
+# username = "shotaro-ada"
+# url = f"https://api.github.com/users/{username}/repos"
+# response = requests.get(url)
 
-languages = []
-for repo in response.json():
-    language = repo["language"]
-    if language is not None and language not in languages:
-        languages.append(language)
+# languages = []
+# for repo in response.json():
+#     language = repo["language"]
+#     if language is not None and language not in languages:
+#         languages.append(language)
 
-print(f"{username}が使用している言語: {', '.join(languages)}")
-
+# print(f"{username}が使用している言語: {', '.join(languages)}")
 
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+
 
 @app.route('/')
 def index():
     return "this is test"
 
+
+#個人プロダクトイベント作成
 @app.route('/createEvent', methods=["POST"])
 def create_event():
-    data = json.loads(request.get_data())['data']
+    data = json.loads(request.get_data())
 
-    doc_ref = db.collection("events").document(data["user_id"])
-    doc_ref.update({data["event_name"]: {
-        "date": data["date"],
-        "description": data["description"],
-        "tags": data["tags"]
-    }})
-    return data["user_id"]
+    doc_ref = db.collection("events").document(data["owner_id"])
+    doc = doc_ref.get()
+
+    events = doc.to_dict()
+
+    if data["event_name"] in events:
+        return {"is_success": False}
+    else:
+        doc_ref.update({data["event_name"]: {
+            "date": data["date"],
+            "description": data["description"],
+            "genre": data["genre"]
+        }})
+        return {"is_success": True}
 
 
-app.run(port=5002, debug=True)
+# ハッカソンチーム作成
+@app.route('/createTeam', methods=["POST"])
+def create_team():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc = doc_ref.get()
+
+    owners = doc.to_dict()
+
+    if data["owner_id"] in owners:
+        return {"is_success": False}
+    else:
+        doc_ref.update({data["owner_id"]: {
+            "team_name": data["team_name"],
+            "description": data["description"],
+            "needed_tech_tags": data["needed_tech_tags"],
+            "wait_list": [],
+            "member_list": []
+        }})
+        return {"is_success": True}
+
+
+# ハッカソんチーム参加
+@app.route('/joinTeam', methods=["POST"])
+def join_team():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["owner_id"]]["wait_list"]
+    memberList = doc.to_dict()[data["owner_id"]]["member_list"]
+
+    if data["user_id"] in memberList:
+        return {"is_success": False}
+    elif data["user_id"] in waitList:
+        return {"is_success": False}
+    else:
+        waitList.append(data["user_id"])
+
+        doc_ref.set({data["owner_id"]: {
+            "wait_list": waitList
+        }}, merge=True)
+        return {"is_success": True}
+
+
+app.run(port=5005, debug=True)
