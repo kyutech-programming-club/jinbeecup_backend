@@ -54,7 +54,7 @@ def index():
     return "this is test"
 
 
-#個人プロダクトイベント作成
+# 個人プロダクトイベント作成
 @app.route('/createEvent', methods=["POST"])
 def create_event():
     data = json.loads(request.get_data())
@@ -70,8 +70,33 @@ def create_event():
         doc_ref.update({data["event_name"]: {
             "date": data["date"],
             "description": data["description"],
-            "genre": data["genre"]
+            "genre": data["genre"],
+            "wait_list": [],
+            "member_list": []
         }})
+        return {"is_success": True}
+
+
+# 個人プロダクト参加申請
+@app.route('/joinEvent', methods=['POST'])
+def join_event():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("events").document(data["owner_id"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["evnet_name"]]["wait_list"]
+    memberList = doc.to_dict()[data["event_name"]]["member_list"]
+
+    if data["user_id"] in memberList:
+        return {"is_success": False}
+    elif data["user_id"] in waitList:
+        return {"is_success": False}
+    else:
+        waitList.append(data["user_id"])
+        doc_ref.set({data["event_name"]: {
+            "wait_list": waitList
+        }}, merge=True)
         return {"is_success": True}
 
 
@@ -80,7 +105,7 @@ def create_event():
 def create_team():
     data = json.loads(request.get_data())
 
-    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
     doc = doc_ref.get()
 
     owners = doc.to_dict()
@@ -103,7 +128,7 @@ def create_team():
 def join_team():
     data = json.loads(request.get_data())
 
-    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
     doc = doc_ref.get()
 
     waitList = doc.to_dict()[data["owner_id"]]["wait_list"]
@@ -115,11 +140,48 @@ def join_team():
         return {"is_success": False}
     else:
         waitList.append(data["user_id"])
-
         doc_ref.set({data["owner_id"]: {
             "wait_list": waitList
         }}, merge=True)
         return {"is_success": True}
 
 
-app.run(port=5005, debug=True)
+# ハッカソンチーム参加申請者取得
+@app.route('/teamWaitList', methods=["POST"])
+def team_wait_list():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["owner_id"]]["wait_list"]
+    return waitList
+
+
+# ハッカソン参加申込承認
+@app.route('/approveTeamJoin', methods=['POST'])
+def approve_team_join():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data['owner_id']]["wait_list"]
+    memberList = doc.to_dict()[data["owner_id"]]["member_list"]
+
+    if data["user_id"] in waitList:
+        waitList.remove(data["user_id"])
+        doc_ref.set({data["owner_id"]: {
+            "wait_list": waitList
+        }}, merge=True)
+
+        memberList.append(data["user_id"])
+        doc_ref.set({data["owner_id"]: {
+            "member_list": memberList
+        }}, merge=True)
+        return {"is_success": True}
+    else:
+        return {"is_success": False}
+
+        
+app.run(port=5007, debug=True)
