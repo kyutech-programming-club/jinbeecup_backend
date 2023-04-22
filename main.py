@@ -6,6 +6,7 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 import json
 import requests
+from bs4 import BeautifulSoup
 
 # firebaseのapiの設定
 cred = credentials.Certificate(
@@ -54,7 +55,7 @@ def index():
     return "this is test"
 
 
-#個人プロダクトイベント作成
+# 個人イベント作成
 @app.route('/createEvent', methods=["POST"])
 def create_event():
     data = json.loads(request.get_data())
@@ -62,17 +63,85 @@ def create_event():
     doc_ref = db.collection("events").document(data["owner_id"])
     doc = doc_ref.get()
 
-    events = doc.to_dict()
+    payload = {data["event_name"]: {
+        "date": data["date"],
+        "description": data["description"],
+        "genre": data["genre"],
+        "wait_list": [],
+        "member_list": []
+    }}
 
-    if data["event_name"] in events:
+    if doc.exists:
+        events = doc.to_dict()
+        if data["event_name"] in events:
+            return {"is_success": False}
+        else:
+            doc_ref.update(payload)
+            return {"is_success": True}
+    else:
+        doc_ref.set(payload)
+        return {"is_success": True}
+
+
+# 個人イベント参加申請
+@app.route('/joinEvent', methods=['POST'])
+def join_event():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("events").document(data["owner_id"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["event_name"]]["wait_list"]
+    memberList = doc.to_dict()[data["event_name"]]["member_list"]
+
+    if data["user_id"] in memberList:
+        return {"is_success": False}
+    elif data["user_id"] in waitList:
         return {"is_success": False}
     else:
-        doc_ref.update({data["event_name"]: {
-            "date": data["date"],
-            "description": data["description"],
-            "genre": data["genre"]
-        }})
+        waitList.append(data["user_id"])
+        doc_ref.set({data["event_name"]: {
+            "wait_list": waitList
+        }}, merge=True)
         return {"is_success": True}
+
+
+# 個人イベント参加申請者一覧
+@app.route('/eventWaitList', methods=["POST"])
+def event_wait_list():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("events").document(data["owner_id"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["event_name"]]["wait_list"]
+    return waitList
+
+
+# 個人イベント参加申込承認
+@app.route('/approveEventJoin', methods=['POST'])
+def approve_event_join():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("events").document(data["owner_id"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data['event_name']]["wait_list"]
+    memberList = doc.to_dict()[data["event_name"]]["member_list"]
+
+    if data["user_id"] in waitList:
+        waitList.remove(data["user_id"])
+        doc_ref.set({data["event_name"]: {
+            "wait_list": waitList
+        }}, merge=True)
+
+        memberList.append(data["user_id"])
+        doc_ref.set({data["event_name"]: {
+            "member_list": memberList
+        }}, merge=True)
+        return {"is_success": True}
+    else:
+        return {"is_success": False}
 
 
 # ハッカソンチーム作成
@@ -80,21 +149,26 @@ def create_event():
 def create_team():
     data = json.loads(request.get_data())
 
-    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
     doc = doc_ref.get()
 
-    owners = doc.to_dict()
+    payload = {data["owner_id"]: {
+        "team_name": data["team_name"],
+        "description": data["description"],
+        "needed_tech_tags": data["needed_tech_tags"],
+        "wait_list": [],
+        "member_list": []
+    }}
 
-    if data["owner_id"] in owners:
-        return {"is_success": False}
+    if doc.exists:
+        owners = doc.to_dict()
+        if data["owner_id"] in owners:
+            return {"is_success": False}
+        else:
+            doc_ref.update(payload)
+            return {"is_success": True}
     else:
-        doc_ref.update({data["owner_id"]: {
-            "team_name": data["team_name"],
-            "description": data["description"],
-            "needed_tech_tags": data["needed_tech_tags"],
-            "wait_list": [],
-            "member_list": []
-        }})
+        doc_ref.set(payload)
         return {"is_success": True}
 
 
@@ -103,7 +177,7 @@ def create_team():
 def join_team():
     data = json.loads(request.get_data())
 
-    doc_ref = db.collection("officialEvents").document(data["cup_name"])
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
     doc = doc_ref.get()
 
     waitList = doc.to_dict()[data["owner_id"]]["wait_list"]
@@ -115,11 +189,109 @@ def join_team():
         return {"is_success": False}
     else:
         waitList.append(data["user_id"])
-
         doc_ref.set({data["owner_id"]: {
             "wait_list": waitList
         }}, merge=True)
         return {"is_success": True}
 
 
-app.run(port=5005, debug=True)
+# ハッカソンチーム参加申請者取得
+@app.route('/teamWaitList', methods=["POST"])
+def team_wait_list():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data["owner_id"]]["wait_list"]
+    return waitList
+
+
+# ハッカソン参加申込承認
+@app.route('/approveTeamJoin', methods=['POST'])
+def approve_team_join():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
+    doc = doc_ref.get()
+
+    waitList = doc.to_dict()[data['owner_id']]["wait_list"]
+    memberList = doc.to_dict()[data["owner_id"]]["member_list"]
+
+    if data["user_id"] in waitList:
+        waitList.remove(data["user_id"])
+        doc_ref.set({data["owner_id"]: {
+            "wait_list": waitList
+        }}, merge=True)
+
+        memberList.append(data["user_id"])
+        doc_ref.set({data["owner_id"]: {
+            "member_list": memberList
+        }}, merge=True)
+        return {"is_success": True}
+    else:
+        return {"is_success": False}
+
+
+@app.route('/getTagFromTopaz', methods=["GET"])
+def get_tag_from_topaz():
+    url = "https://topaz.dev/projects"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        # HTMLコードをBeautifulSoupオブジェクトに変換する
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # id="__NEXT_DATA__"を持つ要素を取得する
+        next_data = soup.find('script', {'id': '__NEXT_DATA__'})
+        data = json.loads(next_data.text)
+        tag_list = data["props"]["pageProps"]["technologyTagList"]
+
+        for el in tag_list:
+            doc_ref = db.collection("tags").document(el["id"])
+            doc = doc_ref.get()
+
+            if not doc.exists:
+                doc_ref.set({"type": el["type"],
+                            "icon_path": el["iconPath"]})
+        # for el in tag_list:
+        #     doc_ref = db.collection("tags").document(el["type"])
+        #     doc_ref.set({el["id"]: {
+        #                  "icon_path": el["iconPath"]}
+        #                  }, merge=True)
+        return {"is_success": True}
+    else:
+        return {"is_success": False}
+
+
+
+# 全てのタグを取得
+@app.route('/getAllTags', methods=["GET"])
+def get_tags():
+    collection_ref = db.collection("tags")
+    docs = collection_ref.get()
+
+    tags = {}
+    for doc in docs:
+        tags[doc.id] = {"type": doc.to_dict()["type"],
+                        "icon_path": doc.to_dict()["icon_path"]}
+    return tags
+
+
+# 必要なタグだけを取得
+@app.route('/getMatchTags', methods=['POST'])
+def get_match_tags():
+    data = json.loads(request.get_data())
+
+    collection_ref = db.collection("tags")
+    docs = collection_ref.get()
+
+    tags = {}
+    for tag_needed in data["tags"]:
+        doc_ref = collection_ref.document(tag_needed)
+        doc = doc_ref.get()
+        tags[tag_needed] = {"type": doc.to_dict()["type"],
+                            "icon_path": doc.to_dict()["icon_path"]}
+    return tags
+
+
+app.run(port=5001, debug=True)
