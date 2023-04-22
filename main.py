@@ -265,8 +265,8 @@ def get_tag_from_topaz():
 
 
 # 全てのタグを取得
-@app.route('/geAllTags', methods=["GET"])
-def get_tag():
+@app.route('/getAllTags', methods=["GET"])
+def get_tags():
     collection_ref = db.collection("tags")
     docs = collection_ref.get()
 
@@ -289,9 +289,9 @@ def get_match_tags():
     for tag_needed in data["tags"]:
         doc_ref = collection_ref.document(tag_needed)
         doc = doc_ref.get()
-        tags[tag_needed] = {"type": doc["type"],
-                            "icon_path": doc["icon_path"]}
+        tags[tag_needed] = {"type": doc.to_dict()["type"],
+                            "icon_path": doc.to_dict()["icon_path"]}
     return tags
 
 
-# app.run(port=5007, debug=True)
+app.run(port=5001, debug=True)
