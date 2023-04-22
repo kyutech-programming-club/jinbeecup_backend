@@ -7,8 +7,9 @@ from firebase_admin import firestore
 import json
 import requests
 
-#firebaseのapiの設定
-cred = credentials.Certificate("./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
+# firebaseのapiの設定
+cred = credentials.Certificate(
+    "./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()
@@ -31,30 +32,31 @@ def send_to_database():
     doc_ref.set({'key': 'value'})
 
 
-#使用言語の取得
-username = "shotaro-ada"
-url = f"https://api.github.com/users/{username}/repos"
-response = requests.get(url)
-
-languages = []
-for repo in response.json():
-    language = repo["language"]
-    if language is not None and language not in languages:
-        languages.append(language)
-
-print(f"{username}が使用している言語: {', '.join(languages)}")
-
-
-
 app = Flask(__name__, static_folder='.', static_url_path='')
+
 
 @app.route('/')
 def index():
     return "this is test"
 
+
+# githubの情報をなんとか
+@app.route('/userSignup', methods=["POST"])
+def signup():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("users").document(data['user_id'])
+    doc_ref.set({
+        "user_name": data["user_name"], 
+        "description": data["description"],
+        "tech_tags": data["tech_tags"]
+    })
+    return {"is_success": True}
+
+
 @app.route('/createEvent', methods=["POST"])
 def create_event():
-    data = json.loads(request.get_data())['data']
+    data = json.loads(request.get_data())
 
     doc_ref = db.collection("events").document(data["user_id"])
     doc_ref.update({data["event_name"]: {
