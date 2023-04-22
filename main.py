@@ -5,10 +5,11 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import json
+import requests
 
-# firebaseのapiの設定
-cred = credentials.Certificate(
-    "./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
+#firebaseのapiの設定
+cred = credentials.Certificate("./jinbee-cup-firebase-adminsdk-y7xm5-80b53cb07f.json")
+
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -30,13 +31,26 @@ def send_to_database():
     doc_ref.set({'key': 'value'})
 
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+#使用言語の取得
+username = "shotaro-ada"
+url = f"https://api.github.com/users/{username}/repos"
+response = requests.get(url)
 
+languages = []
+for repo in response.json():
+    language = repo["language"]
+    if language is not None and language not in languages:
+        languages.append(language)
+
+print(f"{username}が使用している言語: {', '.join(languages)}")
+
+
+
+app = Flask(__name__, static_folder='.', static_url_path='')
 
 @app.route('/')
 def index():
     return "this is test"
-
 
 @app.route('/createEvent', methods=["POST"])
 def create_event():
