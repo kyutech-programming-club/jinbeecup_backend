@@ -28,6 +28,7 @@ openai.api_key = os.environ["OPENAI_API_KEY"]
 # print(response.choices[0]["message"]["content"].strip())
 
 
+
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 
@@ -309,12 +310,13 @@ def sort_team_list():
     doc = doc_ref.get().to_dict()
 
     tech_tags = doc["tech_tags"]
-    all_tags = get_all_tags()
+
+    all_tags = list(get_all_tags().keys())
 
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=[
-            {"role": "user", "content": f"Aさんはプログラミングでは{tech_tags}が得意です。チーム開発をするとき相性の良い順番になるよう、次の技術に関する配列、{all_tags}を並び替えてください。並び替えた配列に{tech_tags}を含まないでください。"},
+        messages=[    
+            {"role": "user", "content": f"Aさんは{tech_tags}が得意です。バックエンドやフロントエンド、インフラなどを考慮し、Aさんとの相性が良い順に技術に関する配列{all_tags}を並び替えてください。並び替えた配列に{tech_tags}を含まないでください。"},
         ],
     )
     print(response.choices[0]["message"]["content"].strip())
@@ -322,4 +324,4 @@ def sort_team_list():
     return response
 
 
-app.run(port=5002, debug=True)
+app.run(port=5003, debug=True)
