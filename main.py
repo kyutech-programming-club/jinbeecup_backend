@@ -28,6 +28,7 @@ openai.api_key = os.environ["OPENAI_API_KEY"]
 # print(response.choices[0]["message"]["content"].strip())
 
 
+
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 
@@ -42,12 +43,17 @@ def signup():
     data = json.loads(request.get_data())
 
     doc_ref = db.collection("users").document(data['user_id'])
-    doc_ref.set({
-        "user_name": data["user_name"], 
-        "description": data["description"],
-        "tech_tags": data["tech_tags"]
-    })
-    return {"is_success": True}
+    doc = doc_ref.get()
+    
+    if doc.exists:
+        return {"is_success": FalseA}
+    else:
+        doc_ref.set({
+            "user_name": data["user_name"], 
+            "description": data["description"],
+            "tech_tags": data["tech_tags"]
+        })
+        return {"is_success": True}
 
 
 
@@ -259,10 +265,9 @@ def get_tag_from_topaz():
         return {"is_success": False}
 
 
-
 # 全てのタグを取得
 @app.route('/getAllTags', methods=["GET"])
-def get_tags():
+def get_all_tags():
     collection_ref = db.collection("tags")
     docs = collection_ref.get()
 
@@ -284,10 +289,44 @@ def get_match_tags():
     tags = {}
     for tag_needed in data["tags"]:
         doc_ref = collection_ref.document(tag_needed)
-        doc = doc_ref.get()
-        tags[tag_needed] = {"type": doc.to_dict()["type"],
-                            "icon_path": doc.to_dict()["icon_path"]}
+        doc = doc_ref.get().to_dict()
+        tags[tag_needed] = {"type": doc["type"],
+                            "icon_path": doc["icon_path"]}
     return tags
 
 
-app.run(port=5001, debug=True)
+# プロフィールを取得
+@app.route('/getProfile', methods=["POST"])
+def get_profile():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("users").document(data["user_id"])
+    doc = doc_ref.get().to_dict()
+
+    return doc
+
+
+# ハッカソンのチームをchatGPTでソート Aさんの得意な技術を列挙し、全ての技術タグから相性の良いタグをソートしてもらう
+@app.route('/sortTeamList', methods=["POST"])
+def sort_team_list():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("users").document(data["user_id"])
+    doc = doc_ref.get().to_dict()
+
+    tech_tags = doc["tech_tags"]
+
+    all_tags = list(get_all_tags().keys())
+
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[    
+            {"role": "user", "content": f"Aさんは{tech_tags}が得意です。バックエンドやフロントエンド、インフラなどを考慮し、Aさんとの相性が良い順に技術に関する配列{all_tags}を並び替えてください。並び替えた配列に{tech_tags}を含まないでください。"},
+        ],
+    )
+    print(response.choices[0]["message"]["content"].strip())
+
+    return response
+
+
+app.run(port=5003, debug=True)
