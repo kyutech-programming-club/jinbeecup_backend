@@ -27,25 +27,6 @@ openai.api_key = os.environ["OPENAI_API_KEY"]
 # )
 # print(response.choices[0]["message"]["content"].strip())
 
-def send_to_database():
-    doc_ref = db.collection("test").document("test_id")
-    # firestore.ArrayUnion　<=おまじない
-    doc_ref.set({'key': 'value'})
-
-
-# 使用言語の取得
-# username = "shotaro-ada"
-# url = f"https://api.github.com/users/{username}/repos"
-# response = requests.get(url)
-
-# languages = []
-# for repo in response.json():
-#     language = repo["language"]
-#     if language is not None and language not in languages:
-#         languages.append(language)
-
-# print(f"{username}が使用している言語: {', '.join(languages)}")
-
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -53,6 +34,21 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 @app.route('/')
 def index():
     return "this is test"
+    
+    
+# githubの情報をなんとか
+@app.route('/userSignup', methods=["POST"])
+def signup():
+    data = json.loads(request.get_data())
+
+    doc_ref = db.collection("users").document(data['user_id'])
+    doc_ref.set({
+        "user_name": data["user_name"], 
+        "description": data["description"],
+        "tech_tags": data["tech_tags"]
+    })
+    return {"is_success": True}
+
 
 
 # 個人イベント作成
