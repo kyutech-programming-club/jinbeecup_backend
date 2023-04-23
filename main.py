@@ -7,6 +7,7 @@ from firebase_admin import firestore
 import json
 import requests
 from bs4 import BeautifulSoup
+import re
 
 # firebaseのapiの設定
 cred = credentials.Certificate(
@@ -235,6 +236,8 @@ def approve_team_join():
         return {"is_success": False}
 
 
+
+
 @app.route('/getTagFromTopaz', methods=["GET"])
 def get_tag_from_topaz():
     url = "https://topaz.dev/projects"
@@ -324,9 +327,44 @@ def sort_team_list():
             {"role": "user", "content": f"Aさんは{tech_tags}が得意です。バックエンドやフロントエンド、インフラなどを考慮し、Aさんとの相性が良い順に技術に関する配列{all_tags}を並び替えてください。並び替えた配列に{tech_tags}を含まないでください。"},
         ],
     )
-    print(response.choices[0]["message"]["content"].strip())
+    response = response.choices[0]["message"]["content"].strip()
 
     return response
 
 
-app.run(port=5003, debug=True)
+#ハッカソン参加チーム一覧を必要な技術によってソート
+@app.route('/getTagFromTeam', methods=["POST"])
+def get_tag_from_team():
+    data = json.loads(request.get_data())
+    
+    doc_ref = db.collection("users").document(data["user_id"])
+    doc = doc_ref.get().to_dict()
+    tech_tags = doc["tech_tags"]
+
+    doc_ref = db.collection("officialEvents").document(data["event_name"])
+    doc = doc_ref.get().to_dict()
+
+    team_tags = {}
+
+    owner_list = list(doc.keys())
+
+    for el in owner_list:
+        team_tags[el] = doc[el]["needed_tech_tags"]
+    
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[    
+            {"role": "user", "content": f"Aさんは{tech_tags}が得意です。一方{team_tags}はチームのオーナーとオーナーが必要としている技術の配列により構成される辞書型配列です。フロントエンドとバックエンド、インフラなどの相性を考慮して相性の良い順にオーナーの名前のみを抽出し解説などは無しで配列のみを答えてください。配列のみです"},
+        ],
+    )
+    response = response.choices[0]["message"]["content"].strip()
+    result = [s.strip(" '") for s in response.split("[")[1].split("]")[0].split(",")]
+  
+    formatted_team_list = {}
+
+    for owner_id in result:
+        formatted_team_list[owner_id] = doc[owner_id]
+    return formatted_team_list
+
+
+app.run(port=5008, debug=True)
