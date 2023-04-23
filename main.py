@@ -43,12 +43,17 @@ def signup():
     data = json.loads(request.get_data())
 
     doc_ref = db.collection("users").document(data['user_id'])
-    doc_ref.set({
-        "user_name": data["user_name"], 
-        "description": data["description"],
-        "tech_tags": data["tech_tags"]
-    })
-    return {"is_success": True}
+    doc = doc_ref.get()
+    
+    if doc.exists:
+        return {"is_success": FalseA}
+    else:
+        doc_ref.set({
+            "user_name": data["user_name"], 
+            "description": data["description"],
+            "tech_tags": data["tech_tags"]
+        })
+        return {"is_success": True}
 
 
 
